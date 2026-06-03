@@ -1,7 +1,6 @@
 import type { Telegram } from 'telegraf';
-import type { Listing } from '../sources/types';
 import { config } from '../config';
-import { fetchAllForSearch, sources } from '../sources';
+import { fetchAllForSearch, enrichForSend } from '../sources';
 import { sendListing } from '../bot/notify';
 import {
   getAllActiveSearches,
@@ -12,27 +11,6 @@ import {
 } from './db';
 import { fingerprint } from './dedup';
 import { matches } from './match';
-
-// Fill detail-only fields (authoritative amenities, entry date) for just the
-// listings we're about to send, grouped by their source. Bounded + best-effort.
-async function enrichForSend(listings: Listing[]): Promise<void> {
-  if (listings.length === 0) return;
-  const byName = new Map<string, Listing[]>();
-  for (const l of listings) {
-    const group = byName.get(l.source) ?? [];
-    group.push(l);
-    byName.set(l.source, group);
-  }
-  for (const [name, group] of byName) {
-    const src = sources.find((s) => s.name === name);
-    if (!src?.enrich) continue;
-    try {
-      await src.enrich(group);
-    } catch (err) {
-      console.error(`[poller] enrich via ${name} failed:`, err instanceof Error ? err.message : err);
-    }
-  }
-}
 
 async function runCycle(telegram: Telegram): Promise<void> {
   try {

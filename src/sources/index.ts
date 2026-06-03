@@ -39,3 +39,27 @@ export async function fetchAllForSearch(search: Search): Promise<Listing[]> {
 
   return all;
 }
+
+/**
+ * Fill detail-only fields (authoritative amenities, entry date) for just the
+ * listings about to be sent, grouped by source. Bounded + best-effort; never
+ * throws. Shared by the poller (steady-state/first-run sends) and /active.
+ */
+export async function enrichForSend(listings: Listing[]): Promise<void> {
+  if (listings.length === 0) return;
+  const byName = new Map<string, Listing[]>();
+  for (const l of listings) {
+    const group = byName.get(l.source) ?? [];
+    group.push(l);
+    byName.set(l.source, group);
+  }
+  for (const [name, group] of byName) {
+    const src = sources.find((s) => s.name === name);
+    if (!src?.enrich) continue;
+    try {
+      await src.enrich(group);
+    } catch (err) {
+      console.error(`[sources] enrich via ${name} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+}

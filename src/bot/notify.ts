@@ -1,5 +1,7 @@
 import type { Telegram } from 'telegraf';
 import type { Listing } from '../sources/types';
+import { cacheListing } from '../core/db';
+import { fingerprint } from '../core/dedup';
 
 function escapeHtml(text: string): string {
   return text
@@ -32,8 +34,17 @@ export async function sendListing(
   telegram: Telegram,
   chatId: number,
   listing: Listing,
-  search?: { id: number; label: string }
+  search?: { id: number; label: string },
+  opts?: { fav?: 'add' | 'remove' | 'none' }
 ): Promise<void> {
+  // Snapshot every card we send so /favorites and /active can re-render it
+  // without re-scraping (and a starred ad survives even if it later delists).
+  try {
+    cacheListing(listing);
+  } catch {
+    /* cache is best-effort */
+  }
+
   const lines: string[] = [];
 
   // #4 — which saved search this result belongs to.
@@ -89,17 +100,30 @@ export async function sendListing(
 
   const caption = lines.join('\n');
 
+  // ⭐ favorite toggle button (default: offer to add).
+  const fav = opts?.fav ?? 'add';
+  const fp = fingerprint(listing);
+  const favRow =
+    fav === 'add'
+      ? [{ text: '⭐ הוסף למועדפים', callback_data: `fav:add:${fp}` }]
+      : fav === 'remove'
+        ? [{ text: '🗑️ הסר ממועדפים', callback_data: `fav:rm:${fp}` }]
+        : null;
+  const reply_markup = favRow ? { inline_keyboard: [favRow] } : undefined;
+
   try {
     const image = Array.isArray(listing.images) ? listing.images[0] : undefined;
     if (image && image.trim().length > 0) {
       await telegram.sendPhoto(chatId, image, {
         caption,
         parse_mode: 'HTML',
+        ...(reply_markup ? { reply_markup } : {}),
       });
     } else {
       await telegram.sendMessage(chatId, caption, {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: false },
+        ...(reply_markup ? { reply_markup } : {}),
       });
     }
   } catch (err) {

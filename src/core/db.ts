@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { config } from '../config';
-import type { Search, DealType } from '../sources/types';
+import type { Search, DealType, Listing } from '../sources/types';
+import { fingerprint } from './dedup';
 
 const DB_PATH = path.join('data', 'dorin.db');
 
@@ -57,6 +58,21 @@ export function initDb(): void {
       source_id TEXT,
       first_seen TEXT,
       PRIMARY KEY (search_id, fingerprint)
+    );
+
+    CREATE TABLE IF NOT EXISTS listing_cache (
+      fingerprint TEXT PRIMARY KEY,
+      source TEXT,
+      source_id TEXT,
+      listing_json TEXT,
+      cached_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS favorites (
+      chat_id INTEGER,
+      fingerprint TEXT,
+      created_at TEXT,
+      PRIMARY KEY (chat_id, fingerprint)
     );
   `);
 }
@@ -232,4 +248,67 @@ export function markSeen(
      (search_id, fingerprint, source, source_id, first_seen)
      VALUES (?, ?, ?, ?, ?)`
   ).run(searchId, fingerprint, source, sourceId, new Date().toISOString());
+}
+
+export function getSearchById(id: number, chatId: number): Search | null {
+  const d = getDb();
+  const row = d
+    .prepare(`SELECT * FROM searches WHERE id = ? AND chat_id = ?`)
+    .get(id, chatId) as SearchRow | undefined;
+  return row ? rowToSearch(row) : null;
+}
+
+// --- Favorites (⭐) ---------------------------------------------------------
+// Every card we send is snapshotted into listing_cache so favorites/active can
+// re-render it without re-scraping (and a starred ad survives even if delisted).
+
+export function cacheListing(listing: Listing): void {
+  const d = getDb();
+  d.prepare(
+    `INSERT INTO listing_cache (fingerprint, source, source_id, listing_json, cached_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(fingerprint) DO UPDATE SET
+       listing_json = excluded.listing_json, cached_at = excluded.cached_at`
+  ).run(fingerprint(listing), listing.source, listing.sourceId, JSON.stringify(listing), new Date().toISOString());
+}
+
+export function addFavorite(chatId: number, fp: string): void {
+  const d = getDb();
+  d.prepare(
+    `INSERT OR IGNORE INTO favorites (chat_id, fingerprint, created_at) VALUES (?, ?, ?)`
+  ).run(chatId, fp, new Date().toISOString());
+}
+
+export function removeFavorite(chatId: number, fp: string): void {
+  const d = getDb();
+  d.prepare(`DELETE FROM favorites WHERE chat_id = ? AND fingerprint = ?`).run(chatId, fp);
+}
+
+export function isFavorite(chatId: number, fp: string): boolean {
+  const d = getDb();
+  const row = d
+    .prepare(`SELECT 1 FROM favorites WHERE chat_id = ? AND fingerprint = ? LIMIT 1`)
+    .get(chatId, fp);
+  return !!row;
+}
+
+export function getFavorites(chatId: number): Listing[] {
+  const d = getDb();
+  const rows = d
+    .prepare(
+      `SELECT c.listing_json AS listing_json
+       FROM favorites f JOIN listing_cache c ON c.fingerprint = f.fingerprint
+       WHERE f.chat_id = ?
+       ORDER BY f.created_at DESC`
+    )
+    .all(chatId) as { listing_json: string }[];
+  const out: Listing[] = [];
+  for (const r of rows) {
+    try {
+      out.push(JSON.parse(r.listing_json) as Listing);
+    } catch {
+      /* skip a corrupt cache row */
+    }
+  }
+  return out;
 }

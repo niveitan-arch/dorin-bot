@@ -13,12 +13,16 @@ import {
   handleWizardText,
   handleWizardCallback,
 } from './wizard';
+import { sendFavorites, handleFavoriteCallback } from './favorites';
+import { sendActiveMenu, handleActiveCallback } from './active';
 
 const HELP_TEXT = [
   'הפקודות שלי: 🤖',
   '',
   '/newsearch – יצירת חיפוש חדש',
   '/mysearches – הצגת החיפושים שלי',
+  '/active – הצגת כל הדירות הפעילות בחיפוש',
+  '/favorites – הדירות שסימנתי ⭐',
   '/pause <מס׳> – השהיית חיפוש',
   '/resume <מס׳> – חידוש חיפוש',
   '/delete <מס׳> – מחיקת חיפוש',
@@ -115,6 +119,14 @@ export function registerCommands(bot: Telegraf): void {
     await ctx.reply(`החיפושים שלכם: 📋\n\n${body}`);
   });
 
+  bot.command('favorites', async (ctx) => {
+    await sendFavorites(ctx);
+  });
+
+  bot.command('active', async (ctx) => {
+    await sendActiveMenu(ctx);
+  });
+
   bot.command('delete', async (ctx) => {
     if (!ctx.chat) return;
     const id = parseIdArg(ctx);
@@ -148,12 +160,12 @@ export function registerCommands(bot: Telegraf): void {
     await ctx.reply(`חיפוש #${id} חודש. ▶️`);
   });
 
-  // Wizard wiring: callbacks first, then free text (only when a wizard is active).
+  // Callback routing: wizard first, then favorites (⭐), then /active menu.
   bot.on('callback_query', async (ctx) => {
-    const handled = await handleWizardCallback(ctx);
-    if (!handled) {
-      await ctx.answerCbQuery();
-    }
+    if (await handleWizardCallback(ctx)) return;
+    if (await handleFavoriteCallback(ctx)) return;
+    if (await handleActiveCallback(ctx)) return;
+    await ctx.answerCbQuery();
   });
 
   bot.on('text', async (ctx) => {
