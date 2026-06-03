@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Runs ON THE MAC (the always-on host). Pulls the latest code, reinstalls deps
 # if they changed, type-checks as a safety gate, and restarts the bot under pm2.
-# Triggered remotely from the dev machine via ship.sh, or run by hand.
+# Called by auto-deploy.sh (the timer), or run by hand.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+# Make node/npm available even when launched headless by pm2's cron.
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 echo "==> git pull"
 git pull --ff-only
