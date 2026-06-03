@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# local data: ignore the live sqlite DB, browser profile, and dumps —
+# but TRACK the one-time migration seed so saved searches move to a new host.
+data/*
+!data/dorin.db.seed
+
+# secrets
+.env
+
+# logs
+*.log
+
+# playwright browser caches / artifacts
+.cache/
+playwright/.cache/
+ms-playwright/
+test-results/
+playwright-report/
