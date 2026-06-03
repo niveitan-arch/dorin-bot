@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   // await launch (which keeps the process alive until shutdown).
   await bot.launch(() => {
     startPolling(bot.telegram);
-    console.log('dorin-bot started ✅ (auto-deploy test)');
+    console.log('dorin-bot started');
   });
 }
 
