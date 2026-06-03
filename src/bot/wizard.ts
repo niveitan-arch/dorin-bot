@@ -79,8 +79,35 @@ function brokerKeyboard() {
   ]);
 }
 
+// Rank for the first location screen: catalog cities first, then plain cities,
+// then neighborhoods, then areas — so the city (the path to the hood picker) leads.
+function locRank(c: LocSuggestion): number {
+  if (c.kind === 'city') return catalogForCity(c.base.city) ? 0 : 1;
+  if (c.kind === 'neighborhood') return 2;
+  return 3; // area
+}
+
+// Clear, kind-specific button label. A catalog city advertises that picking it
+// leads to neighborhood selection; a plain city = whole-city search.
+function locDisplayLabel(c: LocSuggestion): string {
+  if (c.kind === 'city') {
+    return catalogForCity(c.base.city)
+      ? `🏙️ ${c.cityName} — בחרו שכונות »`
+      : `🏙️ ${c.cityName} — כל העיר`;
+  }
+  if (c.kind === 'neighborhood') {
+    return `📍 ${c.hoodName ?? c.cityName} · ${c.cityName}`;
+  }
+  return `🗺️ ${c.cityName}`;
+}
+
 function suggestionKeyboard(cands: LocSuggestion[], withDone: boolean) {
-  const rows = cands.map((c, i) => [Markup.button.callback(c.label, `wiz:loc:${i}`)]);
+  // withDone === true is the "add another hood" screen (type-to-add cities) —
+  // keep its plain labels. Otherwise it's the first location screen — use the
+  // clearer city-vs-neighborhood labels.
+  const rows = cands.map((c, i) => [
+    Markup.button.callback(withDone ? c.label : locDisplayLabel(c), `wiz:loc:${i}`),
+  ]);
   if (withDone) rows.push([Markup.button.callback('✅ סיום אזורים', 'wiz:hoods:done')]);
   return Markup.inlineKeyboard(rows);
 }
@@ -236,8 +263,13 @@ export async function handleWizardText(ctx: Context): Promise<boolean> {
         await ctx.reply('לא מצאתי מיקום מתאים. נסו שם אחר, למשל "תל אביב".');
         return true;
       }
+      // Cities first (the path to the neighborhood picker), then neighborhoods, then areas.
+      cands.sort((a, b) => locRank(a) - locRank(b));
       state.locCandidates = cands;
-      await ctx.reply('בחרו מיקום:', suggestionKeyboard(cands, false));
+      await ctx.reply(
+        'בחרו מהרשימה 👇\n🏙️ עיר — בשלב הבא תבחרו שכונות (או כל העיר)\n📍 שכונה — חיפוש בשכונה אחת בלבד',
+        suggestionKeyboard(cands, false)
+      );
       return true;
     }
 
