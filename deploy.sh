@@ -18,6 +18,23 @@ npm install
 echo "==> typecheck (safety gate — won't restart on a broken build)"
 ./node_modules/.bin/tsc --noEmit
 
+# Don't kill the bot mid-fetch: a restart while a Yad2 browser is open (a poll cycle
+# or a user's new-search enrichment in flight) interrupts the search and is the cause
+# of mid-session lag. Wait for a quiet window first. Bounded so the deploy still
+# finishes well within the auto-deploy cron interval; if it never goes quiet, restart
+# anyway (no worse than before).
+QUIET_WAIT_MAX=90
+waited=0
+while pgrep -f "yad2-profile" >/dev/null 2>&1; do
+  if [ "$waited" -ge "$QUIET_WAIT_MAX" ]; then
+    echo "==> Yad2 browser still busy after ${QUIET_WAIT_MAX}s — restarting anyway"
+    break
+  fi
+  echo "==> Yad2 browser active — deferring restart (${waited}s/${QUIET_WAIT_MAX}s)"
+  sleep 5
+  waited=$((waited + 5))
+done
+
 echo "==> pm2 restart"
 pm2 restart dorin-bot --update-env
 pm2 save
