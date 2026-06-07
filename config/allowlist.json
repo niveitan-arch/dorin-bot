@@ -1,0 +1,8 @@
+{
+  "_comment": "Chat IDs allowed to use the bot. NOT secret — safe to commit. Edit and deploy via ./ship.sh; the running bot picks it up after restart. Merged (union) with ALLOWED_CHAT_IDS from .env.",
+  "chatIds": [
+    953371311,
+    8117462680,
+    349849411
+  ]
+}

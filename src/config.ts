@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 export interface Config {
   telegramBotToken: string;
@@ -33,6 +35,26 @@ function parseChatIds(raw: string | undefined): number[] {
     });
 }
 
+/**
+ * Read the git-tracked, non-secret allowlist file (config/allowlist.json).
+ * Resolved from __dirname so it works under both tsx (src/) and node (dist/) —
+ * both live one level under the repo root, where config/ sits. Never throws:
+ * a missing/invalid file just contributes no ids (env-based ids still apply).
+ */
+function parseAllowlistFile(): number[] {
+  const path = join(__dirname, '..', 'config', 'allowlist.json');
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    const ids = Array.isArray(parsed?.chatIds) ? parsed.chatIds : [];
+    return ids
+      .map((v: unknown) => Number(v))
+      .filter((n: number) => Number.isFinite(n));
+  } catch (err) {
+    console.warn(`[config] could not read allowlist file (${path}):`, err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 function parsePollInterval(raw: string | undefined): number {
   if (!raw || raw.trim().length === 0) return 4;
   const n = Number(raw);
@@ -60,7 +82,8 @@ if (!telegramBotToken || telegramBotToken.trim().length === 0) {
 
 export const config: Config = {
   telegramBotToken: telegramBotToken.trim(),
-  allowedChatIds: parseChatIds(process.env.ALLOWED_CHAT_IDS),
+  // Union of the git-tracked allowlist file and any ids in .env (deduped).
+  allowedChatIds: [...new Set([...parseAllowlistFile(), ...parseChatIds(process.env.ALLOWED_CHAT_IDS)])],
   pollIntervalMin: parsePollInterval(process.env.POLL_INTERVAL_MIN),
   initialSendLimit: parseInitialLimit(process.env.INITIAL_MATCHES_LIMIT),
   yad2NavTimeoutMs: parsePositiveInt(process.env.YAD2_NAV_TIMEOUT_MS, 20000, 'YAD2_NAV_TIMEOUT_MS'),
