@@ -1,6 +1,7 @@
 import type { Listing, Search, Source } from './types';
 import { yad2 } from './yad2';
 import { madlan } from './madlan';
+import { Yad2BlockedError } from './yad2-session';
 
 export const sources: Source[] = [yad2, madlan];
 
@@ -29,6 +30,9 @@ export async function fetchAllForSearch(search: Search): Promise<Listing[]> {
       const results = await source.fetch(search);
       all.push(...results);
     } catch (err) {
+      // A blocked session is a whole-session failure (not a single-source hiccup)
+      // — surface it so the poller can alert the owner to re-login.
+      if (err instanceof Yad2BlockedError) throw err;
       console.error(
         `[sources] source "${source.name}" failed for search ${search.id}:`,
         err instanceof Error ? err.message : err

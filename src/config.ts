@@ -5,6 +5,7 @@ import { join } from 'path';
 export interface Config {
   telegramBotToken: string;
   allowedChatIds: number[];
+  ownerChatId: number | null;
   pollIntervalMin: number;
   initialSendLimit: number;
   yad2NavTimeoutMs: number;
@@ -41,17 +42,20 @@ function parseChatIds(raw: string | undefined): number[] {
  * both live one level under the repo root, where config/ sits. Never throws:
  * a missing/invalid file just contributes no ids (env-based ids still apply).
  */
-function parseAllowlistFile(): number[] {
+function parseAllowlistFile(): { chatIds: number[]; owner: number | null } {
   const path = join(__dirname, '..', 'config', 'allowlist.json');
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf8'));
     const ids = Array.isArray(parsed?.chatIds) ? parsed.chatIds : [];
-    return ids
+    const chatIds = ids
       .map((v: unknown) => Number(v))
       .filter((n: number) => Number.isFinite(n));
+    const ownerRaw = Number(parsed?.owner);
+    const owner = Number.isFinite(ownerRaw) ? ownerRaw : null;
+    return { chatIds, owner };
   } catch (err) {
     console.warn(`[config] could not read allowlist file (${path}):`, err instanceof Error ? err.message : err);
-    return [];
+    return { chatIds: [], owner: null };
   }
 }
 
@@ -80,10 +84,16 @@ if (!telegramBotToken || telegramBotToken.trim().length === 0) {
   );
 }
 
+const allowlist = parseAllowlistFile();
+const allowedChatIds = [...new Set([...allowlist.chatIds, ...parseChatIds(process.env.ALLOWED_CHAT_IDS)])];
+
 export const config: Config = {
   telegramBotToken: telegramBotToken.trim(),
   // Union of the git-tracked allowlist file and any ids in .env (deduped).
-  allowedChatIds: [...new Set([...parseAllowlistFile(), ...parseChatIds(process.env.ALLOWED_CHAT_IDS)])],
+  allowedChatIds,
+  // Who gets operational alerts (e.g. Yad2 session expired). Explicit "owner" in
+  // the allowlist file wins; otherwise the first allowed id.
+  ownerChatId: allowlist.owner ?? allowedChatIds[0] ?? null,
   pollIntervalMin: parsePollInterval(process.env.POLL_INTERVAL_MIN),
   initialSendLimit: parseInitialLimit(process.env.INITIAL_MATCHES_LIMIT),
   yad2NavTimeoutMs: parsePositiveInt(process.env.YAD2_NAV_TIMEOUT_MS, 20000, 'YAD2_NAV_TIMEOUT_MS'),

@@ -1,6 +1,8 @@
 import type { Telegram } from 'telegraf';
 import { config } from '../config';
 import { fetchAllForSearch, enrichForSend } from '../sources';
+import { Yad2BlockedError } from '../sources/yad2-session';
+import { reportYad2Blocked, reportYad2Ok } from './session-alert';
 import { sendListing } from '../bot/notify';
 import {
   getAllActiveSearches,
@@ -14,10 +16,13 @@ import { matches } from './match';
 
 async function runCycle(telegram: Telegram): Promise<void> {
   try {
+    const owner = config.ownerChatId ?? undefined;
     const searches = getAllActiveSearches();
     for (const search of searches) {
       try {
         const listings = await fetchAllForSearch(search);
+        // A successful fetch means the session is healthy — clear any prior alert.
+        void reportYad2Ok(telegram, owner);
         const hits = listings.filter((l) => matches(l, search));
         const firstRun = !isSearchBaselined(search.id);
 
@@ -51,6 +56,12 @@ async function runCycle(telegram: Telegram): Promise<void> {
           }
         }
       } catch (err) {
+        if (err instanceof Yad2BlockedError) {
+          // The whole session is down — every search shares it, so alert the owner
+          // once and stop this cycle rather than hammering the wall per search.
+          await reportYad2Blocked(telegram, owner);
+          break;
+        }
         console.error(`[poller] error processing search ${search.id} (${search.label}):`, err);
       }
     }

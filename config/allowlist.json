@@ -1,5 +1,6 @@
 {
-  "_comment": "Chat IDs allowed to use the bot. NOT secret — safe to commit. Edit and deploy via ./ship.sh; the running bot picks it up after restart. Merged (union) with ALLOWED_CHAT_IDS from .env.",
+  "_comment": "Chat IDs allowed to use the bot. NOT secret — safe to commit. Edit and deploy via ./ship.sh; the running bot picks it up after restart. Merged (union) with ALLOWED_CHAT_IDS from .env. 'owner' gets operational alerts (e.g. Yad2 session expired).",
+  "owner": 953371311,
   "chatIds": [
     953371311,
     8117462680,
