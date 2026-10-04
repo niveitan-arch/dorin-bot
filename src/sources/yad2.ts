@@ -150,11 +150,13 @@ async function readFeedItems(page: Page): Promise<any[]> {
   }
   const feed = json?.props?.pageProps?.feed;
   if (!feed) return []; // landed on the lobby, not a results page
-  return [
-    ...(Array.isArray(feed.private) ? feed.private : []),
-    ...(Array.isArray(feed.agency) ? feed.agency : []),
-    ...(Array.isArray(feed.platinum) ? feed.platinum : []),
-  ];
+  // Yad2 merged the old feed.private + feed.agency lists into one feed.yad2 list
+  // (~40/page, adType private|commercial). platinum + booster are paid listings
+  // with the same item shape. kingOfTheHar / trio / leadingBroker are agency
+  // promos (no token) and yad1 is new-construction projects — skipped.
+  // The legacy keys are kept so an old-format page still parses.
+  const keys = ['yad2', 'private', 'agency', 'platinum', 'booster'];
+  return keys.flatMap((k) => (Array.isArray(feed[k]) ? feed[k] : []));
 }
 
 // --- Detail-page enrichment -------------------------------------------------
