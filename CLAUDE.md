@@ -46,7 +46,10 @@ pushes fixes; never ship blind over a divergent remote.
 
 ## Yad2 scraping + anti-bot session (the hard part)
 
-- Listings are SSR'd into `__NEXT_DATA__.props.pageProps.feed.{private,agency,platinum}` (~43/page).
+- Listings are SSR'd into `__NEXT_DATA__.props.pageProps.feed` (~44/page): main list `feed.yad2`
+  (private + commercial mixed; was `private`/`agency` until ~Sep 2026) + paid `platinum`/`booster`.
+  `kingOfTheHar`/`trio`/`leadingBroker` are agency promos and `yad1` is new-construction — not read.
+  If `npm run scrape:yad2` suddenly returns ~3 listings, Yad2 renamed the feed lists again.
   Accurate amenities come from each item's **detail page** `__NEXT_DATA__ …dehydratedState.queries[]
   .state.data.inProperty` (`includeParking/Elevator/SecurityRoom/Balcony`) — the feed `tags[]` are sparse
   and unreliable. Enrichment runs only on the bounded set of cards actually being sent.
@@ -77,7 +80,10 @@ operational alerts; falls back to the first allowed id. Read in `src/config.ts` 
 
 - `src/sources/` — `yad2.ts` (fetch + enrich), `yad2-location.ts` (autocomplete), `yad2-session.ts`
   (`withYad2Context`, `pageIsBlocked`, `Yad2BlockedError`), `hood-catalog.ts` (per-city neighborhood
-  catalogs: TLV 5000, Ramat Gan 8600, Givatayim 6300, Beer Sheva 9000), `index.ts` (`fetchAllForSearch`,
+  catalogs: TLV 5000, Ramat Gan 8600, Givatayim 6300, Beer Sheva 9000, Rehovot 8400, Ness Ziona 7200,
+  Be'er Ya'akov 2530, Rishon LeZion 8300 — harvest = autocomplete sweep **plus** reading hood names off
+  real results pages and resolving the missing ones by exact name; the sweep alone misses busy hoods),
+  `index.ts` (`fetchAllForSearch`,
   `enrichForSend`), `madlan.ts` (stub).
 - `src/core/` — `db.ts` (better-sqlite3; `seen_listings` PK=(search_id,fingerprint); `favorites` +
   `listing_cache`), `poller.ts`, `match.ts`, `dedup.ts`, `session-alert.ts`.

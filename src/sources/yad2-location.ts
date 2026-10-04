@@ -16,7 +16,8 @@ interface RawSuggestion {
 }
 
 function classify(info: string): LocSuggestion['kind'] | null {
-  if (info === 'עיר') return 'city';
+  // Yad2 labels some towns as a local council (e.g. באר יעקב) rather than a city.
+  if (info === 'עיר' || info === 'מועצה מקומית') return 'city';
   if (info === 'שכונה') return 'neighborhood';
   if (info === 'איזור' || info === 'אזור') return 'area';
   return null; // skip streets / regions
