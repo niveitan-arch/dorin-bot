@@ -48,11 +48,21 @@ async function runCycle(telegram: Telegram): Promise<void> {
           );
         } else {
           const unseen = hits.filter((l) => !hasSeen(search.id, fingerprint(l)));
-          await enrichForSend(unseen);
-          for (const listing of unseen) {
-            const fp = fingerprint(listing);
-            markSeen(search.id, fp, listing.source, listing.sourceId);
+          // Flood guard: a scraper fix or Yad2 format change can suddenly expose
+          // many never-seen listings at once. Send at most `limit` per search per
+          // cycle and mark the rest seen (still reachable via /active).
+          const limit = config.initialSendLimit;
+          const toSend = unseen.slice(0, limit);
+          await enrichForSend(toSend);
+          for (const listing of toSend) {
+            markSeen(search.id, fingerprint(listing), listing.source, listing.sourceId);
             await sendListing(telegram, search.chatId, listing, { id: search.id, label: search.label });
+          }
+          for (const listing of unseen.slice(limit)) {
+            markSeen(search.id, fingerprint(listing), listing.source, listing.sourceId);
+          }
+          if (unseen.length > limit) {
+            console.log(`[poller] search ${search.id}: ${unseen.length} new, sent ${limit}, suppressed ${unseen.length - limit} (flood guard)`);
           }
         }
       } catch (err) {
